@@ -8,20 +8,7 @@ export async function POST(req: Request) {
   try {
     const { name, age, gender, background } = await req.json()
 
-    // สร้างข้อมูลเริ่มต้นสำหรับทักษะและความสัมพันธ์
-    // เอาส่วนนี้ออก
-    // const initialSkills = {
-    //   การพูด: 15,
-    //   ความรู้ประวัติศาสตร์: 5,
-    //   กีตาร์: 0,
-    // }
-
-    // const initialRelationships = {
-    //   เจน: 80,
-    //   เจ้าของร้านหนังสือ: 25,
-    // }
-
-    // บันทึกข้อมูลลง Supabase
+    // บันทึกข้อมูลลง Supabase โดยไม่มีข้อมูล mockup
     const { data, error } = await supabase
       .from("players")
       .insert([
@@ -30,8 +17,8 @@ export async function POST(req: Request) {
           age,
           gender,
           background,
-          skills: {},
-          relationships: {},
+          skills: {}, // เริ่มต้นด้วยออบเจ็กต์ว่าง
+          relationships: {}, // เริ่มต้นด้วยออบเจ็กต์ว่าง
         },
       ])
       .select()

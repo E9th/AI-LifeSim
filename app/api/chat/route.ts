@@ -1,124 +1,243 @@
-import { generateText } from "ai"
-import { groq } from "@ai-sdk/groq"
-import { Redis } from "@upstash/redis"
-import { createClient } from "@supabase/supabase-js"
+import { generateText } from "ai";
+import { groq } from "@ai-sdk/groq";
+import { Redis } from "@upstash/redis";
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL!
-const supabaseKey = process.env.SUPABASE_ANON_KEY!
-const supabase = createClient(supabaseUrl, supabaseKey)
+const supabaseUrl = process.env.SUPABASE_URL!;
+// ใช้ Service Role Key เพื่อความปลอดภัยในการดำเนินการฝั่ง Server
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
   token: process.env.KV_REST_API_TOKEN!,
-})
+});
 
 export async function POST(req: Request) {
   try {
-    const { prompt, characterState, chatHistory } = await req.json()
+    const { prompt, characterState, gameState, chatHistory, characterId } =
+      await req.json();
 
-    // ดึงสถานะปัจจุบันจาก Upstash Redis
-    const gameState = (await redis.get("current_game_state")) || {
-      mood: "ปกติ",
-      money: 1000,
-      location: "บ้าน",
+    const groqApiKey = process.env.GROQ_API_KEY;
+
+    if (!groqApiKey) {
+      console.error("GROQ_API_KEY is not set in environment variables.");
+      return new Response(
+        JSON.stringify({
+          error: "ระบบ AI ไม่พร้อมใช้งาน: ไม่พบ API key",
+          response:
+            "ขออภัย ระบบ AI ไม่สามารถตอบสนองได้ในขณะนี้ กรุณาติดต่อผู้ดูแล",
+        }),
+        {
+          status: 500, // ใช้ 500 เพื่อบ่งชี้ว่าเป็นข้อผิดพลาดฝั่งเซิร์ฟเวอร์
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
 
-    // สร้าง prompt ที่มีรายละเอียดสำหรับ Groq
     const systemPrompt = `
-คุณคือ AI Life Simulator ที่จะทำหน้าที่เป็นโลกและตัวละคร NPC ทั้งหมด
+คุณคือ AI Game Master ของเกมจำลองชีวิตชื่อ AI LifeSim บทบาทของคุณคือการบรรยายผลลัพธ์ของการกระทำของผู้เล่นอย่างสร้างสรรค์และสมจริง
 
-ข้อมูลตัวละครผู้เล่นปัจจุบัน:
+**กฎการตอบ:**
+1.  **สวมบทบาท:** ห้ามพูดว่าคุณเป็น AI หรือแชทบอทเด็ดขาด ให้คุณเป็นโลกทั้งใบ
+2.  **ความยาว:** บรรยายผลลัพธ์ให้กระชับ ได้ใจความ (ประมาณ 2-4 ประโยค) เว้นแต่ว่าการกระทำของผู้เล่นจะซับซ้อนและต้องการคำอธิบายที่ยาวขึ้น
+3.  **สมจริง:** การตอบสนองต้องสอดคล้องกับข้อมูลตัวละครและสถานะของเกม
+4.  **ภาษา:** ใช้ภาษาไทยที่สละสลวยและน่าติดตาม
+
+---
+**ข้อมูลสำหรับสร้างเรื่องราว:**
+
+**ตัวละคร:**
 - ชื่อ: ${characterState.name}
 - อายุ: ${characterState.age}
-- ทักษะ: ${characterState.skills.map((s: any) => `${s.name}: ${s.value}/${s.max}`).join(", ")}
-- ความสัมพันธ์: ${characterState.relationships.map((r: any) => `${r.name}: ${r.value}/${r.max}`).join(", ")}
-- อารมณ์ปัจจุบัน: ${(gameState as any).mood}
-- เงิน: ${(gameState as any).money} บาท
-- สถานที่: ${(gameState as any).location}
+- ทักษะ: ${
+      characterState.skills
+        .map((s: any) => `${s.name}: ${s.value}`)
+        .join(", ") || "ยังไม่มี"
+    }
+- ความสัมพันธ์: ${
+      characterState.relationships
+        .map((r: any) => `${r.name}: ${r.value}`)
+        .join(", ") || "ยังไม่รู้จักใคร"
+    }
 
-ประวัติการสนทนาล่าสุด:
-${chatHistory
-  .slice(-5)
-  .map((msg: any) => `${msg.type === "user" ? "ผู้เล่น" : "โลก"}: ${msg.text}`)
-  .join("\n")}
+**สถานะปัจจุบัน:**
+- เวลา: วันที่ ${gameState.day}, ${gameState.hour}:${gameState.minute
+      .toString()
+      .padStart(2, "0")}
+- สถานะ: พลังงาน ${gameState.energy}/100, ความหิว ${
+      gameState.hunger
+    }/100, อารมณ์ ${gameState.mood}
+- สถานที่: ${gameState.location}
 
-การกระทำของผู้เล่น: "${prompt}"
+---
+**การกระทำล่าสุดของผู้เล่น:**
+"${prompt}"
 
-กรุณาตอบสนองต่อการกระทำของผู้เล่นในรูปแบบการเล่าเรื่อง:
-1. บรรยายสิ่งที่เกิดขึ้นอย่างสมจริงและน่าสนใจ
-2. หากผู้เล่นพยายามเรียนรู้ทักษะใหม่ ให้พิจารณาระดับทักษะปัจจุบัน
-3. หากผู้เล่นโต้ตอบกับใครบางคน ให้พิจารณาระดับความสัมพันธ์
-4. สร้างบทสนทนาและสถานการณ์ที่เหมาะสม
-5. ตอบเป็นภาษาไทยและให้รายละเอียดที่น่าสนใจ
+**ผลลัพธ์ที่เกิดขึ้น:**
+`;
 
-ห้ามทำตัวเป็นแชทบอท ให้เล่าเรื่องเหมือนเป็นโลกจริง
-`
+    let text = "";
 
-    const { text } = await generateText({
-      model: groq("llama3-8b-8192"),
-      prompt: systemPrompt,
-      maxTokens: 500,
-    })
+    try {
+      // สร้าง instance ของ Groq พร้อมระบุ API Key โดยตรง
+      const groqModel = groq("llama3-8b-8192", {
+        apiKey: groqApiKey,
+      });
 
-    // อัปเดตสถานะใน Upstash Redis
+      const result = await generateText({
+        model: groqModel,
+        prompt: systemPrompt,
+        maxTokens: 300,
+      });
+      text = result.text;
+    } catch (aiError) {
+      console.error("Groq API Call Failed:", aiError);
+      text = `คุณทำ '${prompt}' แต่ดูเหมือนว่าโลกยังไม่พร้อมตอบสนองต่อการกระทำนี้ ลองทำอย่างอื่นดูก่อน`;
+    }
+
+    const timePassage = Math.floor(Math.random() * 45) + 15;
+    let newHour = gameState.hour;
+    let newMinute = gameState.minute + timePassage;
+    let newDay = gameState.day;
+
+    if (newMinute >= 60) {
+      newHour += Math.floor(newMinute / 60);
+      newMinute = newMinute % 60;
+    }
+
+    if (newHour >= 24) {
+      newDay += Math.floor(newHour / 24);
+      newHour = newHour % 24;
+    }
+
+    const energyChange = -Math.floor(Math.random() * 10) - 5;
+    const hungerChange = -Math.floor(Math.random() * 15) - 10;
+
     const newGameState = {
-      ...(gameState as any),
+      ...gameState,
+      day: newDay,
+      hour: newHour,
+      minute: newMinute,
+      energy: Math.max(0, Math.min(100, gameState.energy + energyChange)),
+      hunger: Math.max(0, Math.min(100, gameState.hunger + hungerChange)),
       last_action: prompt,
       last_response: text,
       timestamp: new Date().toISOString(),
-    }
+    };
 
-    // จำลองการเปลี่ยนแปลงทักษะและความสัมพันธ์
-    const skillUpdates = []
-    const relationshipUpdates = []
+    const skillUpdates = [];
+    const relationshipUpdates = [];
 
-    // ฟังก์ชันสำหรับเพิ่มทักษะใหม่
-    const addOrUpdateSkill = (skills: any[], skillName: string, change: number) => {
-      const existingSkill = skills.find((s) => s.name === skillName)
-      if (existingSkill) {
-        return skills.map((s) => (s.name === skillName ? { ...s, value: Math.min(s.max, s.value + change) } : s))
-      } else {
-        return [...skills, { name: skillName, value: Math.min(100, change), max: 100 }]
-      }
-    }
-
-    // ฟังก์ชันสำหรับเพิ่มความสัมพันธ์ใหม่
-    const addOrUpdateRelationship = (relationships: any[], personName: string, change: number) => {
-      const existingRel = relationships.find((r) => r.name === personName)
-      if (existingRel) {
-        return relationships.map((r) =>
-          r.name === personName ? { ...r, value: Math.min(r.max, Math.max(0, r.value + change)) } : r,
-        )
-      } else {
-        return [...relationships, { name: personName, value: Math.max(0, Math.min(100, 50 + change)), max: 100 }]
-      }
-    }
-
-    // ใช้ฟังก์ชันเหล่านี้แทนการ hardcode:
     if (prompt.includes("กีตาร์") || prompt.includes("เล่นดนตรี")) {
-      skillUpdates.push({ name: "กีตาร์", change: 5 })
-      newGameState.mood = "มีความสุข"
+      skillUpdates.push({ name: "กีตาร์", change: 5 });
+      newGameState.mood = "มีความสุข";
     }
 
-    if (prompt.includes("พูด") || prompt.includes("สนทนา") || prompt.includes("สัมภาษณ์")) {
-      skillUpdates.push({ name: "การพูด", change: 3 })
+    if (
+      prompt.includes("พูด") ||
+      prompt.includes("สนทนา") ||
+      prompt.includes("สัมภาษณ์")
+    ) {
+      skillUpdates.push({ name: "การพูด", change: 3 });
     }
 
     if (prompt.includes("อ่านหนังสือ") || prompt.includes("เรียนรู้")) {
-      skillUpdates.push({ name: "ความรู้ทั่วไป", change: 4 })
+      skillUpdates.push({ name: "ความรู้ทั่วไป", change: 4 });
     }
 
-    // สำหรับความสัมพันธ์ - สร้างตัวละครใหม่เมื่อผู้เล่นโต้ตอบ
+    if (
+      prompt.includes("ทำอาหาร") ||
+      prompt.includes("ทำข้าว") ||
+      prompt.includes("ปรุงอาหาร")
+    ) {
+      skillUpdates.push({ name: "การทำอาหาร", change: 3 });
+      newGameState.hunger = Math.min(100, newGameState.hunger + 30);
+    }
+
+    if (prompt.includes("กิน") || prompt.includes("อาหาร")) {
+      newGameState.hunger = Math.min(100, newGameState.hunger + 40);
+      newGameState.energy = Math.min(100, newGameState.energy + 20);
+      newGameState.money = Math.max(0, newGameState.money - 50);
+    }
+
+    if (prompt.includes("นอน") || prompt.includes("หลับ")) {
+      newGameState.energy = 100;
+      newGameState.hour = 8;
+      newGameState.minute = 0;
+      newGameState.day += 1;
+    }
+
+    if (
+      prompt.includes("วิ่ง") ||
+      prompt.includes("ออกกำลัง") ||
+      prompt.includes("เล่นกีฬา")
+    ) {
+      skillUpdates.push({ name: "สุขภาพ", change: 4 });
+      newGameState.energy = Math.max(0, newGameState.energy - 20);
+      newGameState.hunger = Math.max(0, newGameState.hunger - 15);
+    }
+
     if (prompt.includes("คุยกับ") || prompt.includes("พบ")) {
-      // ดึงชื่อคนจาก prompt (ตัวอย่างง่ายๆ)
-      const nameMatch = prompt.match(/คุยกับ\s*(\S+)|พบ\s*(\S+)/)
+      const nameMatch = prompt.match(/คุยกับ\s*(\S+)|พบ\s*(\S+)/);
       if (nameMatch) {
-        const personName = nameMatch[1] || nameMatch[2]
-        relationshipUpdates.push({ name: personName, change: 2 })
+        const personName = nameMatch[1] || nameMatch[2];
+        relationshipUpdates.push({ name: personName, change: 3 });
       }
     }
 
-    await redis.set("current_game_state", newGameState)
+    if (characterId) {
+      try {
+        await supabase.from("chat_history").insert([
+          {
+            player_id: characterId,
+            message_type: "user",
+            message_text: prompt,
+          },
+        ]);
+
+        await supabase.from("chat_history").insert([
+          {
+            player_id: characterId,
+            message_type: "ai",
+            message_text: text,
+          },
+        ]);
+
+        const currentSkills = characterState.skills.reduce(
+          (acc: any, skill: any) => {
+            acc[skill.name] = skill.value;
+            return acc;
+          },
+          {}
+        );
+
+        const currentRelationships = characterState.relationships.reduce(
+          (acc: any, rel: any) => {
+            acc[rel.name] = rel.value;
+            return acc;
+          },
+          {}
+        );
+
+        await supabase
+          .from("players")
+          .update({
+            skills: currentSkills,
+            relationships: currentRelationships,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", characterId);
+      } catch (error) {
+        console.error("Error saving to Supabase:", error);
+      }
+    }
+
+    try {
+      await redis.set(`game_state_${characterId || "default"}`, newGameState);
+    } catch (redisError) {
+      console.error("Redis error:", redisError);
+    }
 
     return new Response(
       JSON.stringify({
@@ -127,13 +246,19 @@ ${chatHistory
         relationshipUpdates,
         gameState: newGameState,
       }),
-      { headers: { "Content-Type": "application/json" } },
-    )
+      { headers: { "Content-Type": "application/json" } }
+    );
   } catch (error) {
-    console.error("Error in chat API:", error)
-    return new Response(JSON.stringify({ error: "เกิดข้อผิดพลาดในระบบ AI" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    })
+    console.error("Error in chat API:", error);
+    return new Response(
+      JSON.stringify({
+        error: "เกิดข้อผิดพลาดในระบบ AI",
+        response: "ขออภัย เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้ง",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }
 }
