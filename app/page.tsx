@@ -1,37 +1,131 @@
-import Link from "next/link"
+"use client";
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+interface CharacterSummary {
+  id: string;
+  name: string;
+  age: number;
+  created_at: string;
+}
 
 export default function HomePage() {
+  const [characters, setCharacters] = useState<CharacterSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    const fetchCharacters = async () => {
+      const characterIds = JSON.parse(localStorage.getItem('characterIds') || '[]');
+      if (characterIds.length > 0) {
+        try {
+          const response = await fetch('/api/characters', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ characterIds }),
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setCharacters(data);
+          }
+        } catch (error) {
+          console.error("Failed to fetch characters", error);
+        }
+      }
+      setIsLoading(false);
+    };
+
+    fetchCharacters();
+  }, []);
+
+  const handleDelete = async (characterId: string) => {
+    if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบตัวละครนี้? การกระทำนี้ไม่สามารถย้อนกลับได้`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/delete-character', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId }),
+      });
+
+      if (response.ok) {
+        // ลบ ID ออกจาก localStorage
+        const existingIds = JSON.parse(localStorage.getItem("characterIds") || "[]");
+        const newIds = existingIds.filter((id: string) => id !== characterId);
+        localStorage.setItem("characterIds", JSON.stringify(newIds));
+
+        // อัปเดต State เพื่อให้ UI แสดงผลใหม่
+        setCharacters(prev => prev.filter(char => char.id !== characterId));
+        alert("ลบตัวละครสำเร็จ");
+      } else {
+        throw new Error('Failed to delete character');
+      }
+    } catch (error) {
+      console.error("Error deleting character:", error);
+      alert("เกิดข้อผิดพลาดในการลบตัวละคร");
+    }
+  };
+
   return (
     <div className="antialiased">
-      {/* Header / เหมือนสันปกหนังสือ */}
       <header className="w-full py-6">
         <div className="container mx-auto px-6 flex justify-center items-center">
           <h1 className="text-xl font-bold tracking-widest">AI LifeSim</h1>
         </div>
       </header>
 
-      {/* Main Content / หน้ากระดาษที่ว่างเปล่า */}
       <main className="hero-bg">
         <div className="container mx-auto px-6 text-center min-h-[80vh] flex flex-col justify-center items-center">
-          <h1 className="text-4xl md:text-6xl book-title mb-4">เริ่มต้นชีวิตบทใหม่</h1>
-          <h2 className="text-2xl md:text-3xl font-light text-gray-600 mb-8">กับโลกที่ตอบสนองต่อทุกการตัดสินใจของคุณ</h2>
-          <p className="prose-style text-lg mx-auto mb-12">
-            {
-              "เคยสงสัยไหม... 'ถ้าหากว่า' ชีวิตคุณเป็นอีกแบบจะเป็นยังไง? ที่นี่คือโลกจำลองที่คุณจะได้ใช้ชีวิตอย่างอิสระ ทุกการกระทำของคุณ ตั้งแต่การตัดสินใจเรียนรู้ทักษะใหม่, การสร้างความสัมพันธ์กับผู้คน, ไปจนถึงการเลือกเส้นทางอาชีพ จะเป็นสิ่งที่กำหนด 'เส้นทางชีวิต' ของคุณ และ 'โลก' ทั้งใบที่ขับเคลื่อนโดย AI จะตอบสนองต่อคุณอย่างสมจริง และสร้างเรื่องราวของคุณที่ไม่ซ้ำใคร จงเป็นในสิ่งที่อยากเป็น และสำรวจทุกความเป็นไปได้ที่ไร้ขีดจำกัด เพราะที่นี่ คุณเป็น 'อิสระ'"
-            }
-          </p>
-          <Link href="/create-character" className="cta-button font-bold py-3 px-10 rounded-sm text-lg tracking-wider">
-            เริ่มต้นบทแรก
-          </Link>
+          <h1 className="text-4xl md:text-6xl book-title mb-4">เลือกเส้นทางชีวิตของคุณ</h1>
+          <p className="text-lg text-gray-600 mb-12">สร้างเรื่องราวบทใหม่ หรือสานต่อการเดินทางที่ผ่านมา</p>
+
+          <div className="w-full max-w-2xl">
+            <Link href="/create-character" className="block w-full cta-button font-bold py-4 px-10 rounded-sm text-xl tracking-wider mb-8">
+              + สร้างตัวละครใหม่
+            </Link>
+
+            <h2 className="text-2xl font-medium mb-4">ตัวละครของคุณ</h2>
+            {isLoading ? (
+              <p>กำลังโหลดตัวละคร...</p>
+            ) : characters.length > 0 ? (
+              <div className="space-y-4">
+                {characters.map(char => (
+                  <div key={char.id} className="character-card flex items-center justify-between p-4 border rounded-lg bg-white bg-opacity-70">
+                    <div>
+                      <h3 className="text-xl font-semibold text-left">{char.name}</h3>
+                      <p className="text-sm text-gray-500 text-left">อายุ: {char.age}, สร้างเมื่อ: {new Date(char.created_at).toLocaleDateString('th-TH')}</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button 
+                        onClick={() => router.push(`/game?characterId=${char.id}`)}
+                        className="cta-button-secondary py-2 px-4 rounded-md">
+                        เล่นต่อ
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(char.id)}
+                        className="delete-button py-2 px-4 rounded-md">
+                        ลบ
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 italic">ยังไม่มีตัวละครที่สร้างไว้ เริ่มต้นสร้างตัวละครแรกของคุณได้เลย!</p>
+            )}
+          </div>
         </div>
       </main>
 
-      {/* Footer / ปกหลัง */}
       <footer className="bg-transparent text-gray-500 py-8 mt-10">
         <div className="container mx-auto px-6 text-center">
           <p>&copy; 2024 AI Life Simulation</p>
         </div>
       </footer>
     </div>
-  )
+  );
 }

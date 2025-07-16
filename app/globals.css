@@ -181,6 +181,39 @@ body {
   border: 2px solid var(--bg-color);
 }
 
+.character-card {
+  border-color: #eae0d5;
+  transition: box-shadow 0.2s ease-in-out;
+}
+
+.character-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.cta-button-secondary {
+    background-color: #4a4441;
+    color: #f8f5f2;
+    border: 1px solid #4a4441;
+    transition: all 0.3s ease;
+}
+
+.cta-button-secondary:hover {
+    background-color: transparent;
+    color: #4a4441;
+}
+
+.delete-button {
+    background-color: transparent;
+    color: #c0392b;
+    border: 1px solid #e74c3c;
+    transition: all 0.3s ease;
+}
+
+.delete-button:hover {
+    background-color: #e74c3c;
+    color: white;
+}
+
 @media (max-width: 768px) {
   .main-container {
     grid-template-columns: 1fr;
