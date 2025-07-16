@@ -12,6 +12,19 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN!,
 });
 
+// Helper function to extract choices from AI response
+function extractChoices(text: string): [string, string] {
+  const choiceRegex = /ทางเลือก:\s*1\.\s*(.*?)\s*2\.\s*(.*)/s;
+  const match = text.match(choiceRegex);
+  if (match && match[1] && match[2]) {
+    // Trim whitespace and potential trailing newlines
+    return [match[1].trim(), match[2].trim()];
+  }
+  // Default choices if parsing fails, to keep the game going
+  return ["สำรวจรอบๆ", "พักผ่อนสักครู่"];
+}
+
+
 export async function POST(req: Request) {
   try {
     const { prompt, characterState, gameState, chatHistory, characterId } =
@@ -35,18 +48,26 @@ export async function POST(req: Request) {
     }
 
     let text = "";
-    let newLastAction = prompt; // ตั้งค่า last_action เริ่มต้นเป็น prompt ปัจจุบัน
+    let actionText = prompt;
 
-    // --- 🛡️ FIX: จัดการ Action ซ้ำซ้อน ---
-    if (prompt === gameState.last_action) {
+    // --- 💡 FIX: Map numbered input to actual choice text ---
+    if ((prompt === '1' || prompt === '2') && gameState.previousChoices && gameState.previousChoices.length === 2) {
+        actionText = gameState.previousChoices[parseInt(prompt) - 1];
+    }
+
+    let newLastAction = actionText;
+
+    // --- 🛡️ FIX: Refined fallback logic ---
+    if (actionText === gameState.last_action) {
       const fallbackResponses = [
-        `เอิร์ธพยายามจะ '${prompt}' อีกครั้ง แต่ดูเหมือนว่าไม่มีอะไรเปลี่ยนแปลงหรือเกิดขึ้นเพิ่มเติมในตอนนี้ เขาจึงหยุดและคิดว่าจะทำอะไรต่อไปดี\nความรู้สึก: เอิร์ธรู้สึกว่าควรจะลองทำอะไรใหม่ๆ\nทางเลือก: 1. ออกไปเดินเล่นนอกบ้าน 2. เปิดทีวีดู`,
-        `การทำ '${prompt}' ซ้ำอีกรอบไม่ได้ให้ผลลัพธ์ที่แตกต่างไปจากเดิม เอิร์ธจึงมองหาสิ่งอื่นทำ\nความรู้สึก: เอิร์ธเริ่มรู้สึกเบื่อเล็กน้อย\nทางเลือก: 1. จัดห้องให้เป็นระเบียบ 2. หาหนังสือมาอ่าน`
+        `เอิร์ธพยายามจะ '${actionText}' อีกครั้ง แต่ดูเหมือนว่าไม่มีอะไรเปลี่ยนแปลงหรือเกิดขึ้นเพิ่มเติมในตอนนี้ เขาจึงหยุดและคิดว่าจะทำอะไรต่อไปดี\nความรู้สึก: เอิร์ธรู้สึกว่าควรจะลองทำอะไรใหม่ๆ\nทางเลือก: 1. ออกไปเดินเล่นนอกบ้าน 2. เปิดทีวีดู`,
+        `การทำ '${actionText}' ซ้ำอีกรอบไม่ได้ให้ผลลัพธ์ที่แตกต่างไปจากเดิม เอิร์ธจึงมองหาสิ่งอื่นทำ\nความรู้สึก: เอิร์ธเริ่มรู้สึกเบื่อเล็กน้อย\nทางเลือก: 1. จัดห้องให้เป็นระเบียบ 2. หาหนังสือมาอ่าน`
       ];
       text = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
-      newLastAction = `__FALLBACK_FOR_${prompt}`; // อัปเดต last_action เป็นค่าพิเศษ
+      // Reset last_action after fallback to prevent loop
+      newLastAction = `__FALLBACK_RESOLVED__`; 
     } else {
-      // --- 🖋️ Prompt V5 ---
+      // --- 🖋️ Prompt V6: Updated for free-text ---
       const systemPrompt = `
 คุณคือ Game Master เล่าเรื่องราวของ AI LifeSim ในรูปแบบนิยายสั้นภาษาไทย
 ห้ามพิมพ์วันที่หรือเวลาใด ๆ ในเนื้อเรื่อง
@@ -68,7 +89,7 @@ export async function POST(req: Request) {
 ประวัติสนทนา (4 ข้อสุดท้าย):
 ${chatHistory.slice(-4).map((m: any)=>`${m.type==='user'?'ผู้เล่น':'AI'}: ${m.text}`).join('\n')}
 
-ผู้เล่นเลือก: "${prompt}"
+ผู้เล่นเลือก: "${actionText}"
 
 เล่าเหตุการณ์ต่อ:
 `;
@@ -86,7 +107,7 @@ ${chatHistory.slice(-4).map((m: any)=>`${m.type==='user'?'ผู้เล่น'
         text = result.text;
       } catch (aiError) {
         console.error("Groq API Call Failed:", aiError);
-        text = `คุณทำ '${prompt}' แต่ดูเหมือนว่าโลกยังไม่พร้อมตอบสนองต่อการกระทำนี้ ลองทำอย่างอื่นดูก่อน`;
+        text = `คุณทำ '${actionText}' แต่ดูเหมือนว่าโลกยังไม่พร้อมตอบสนองต่อการกระทำนี้ ลองทำอย่างอื่นดูก่อน`;
       }
     }
 
@@ -108,6 +129,9 @@ ${chatHistory.slice(-4).map((m: any)=>`${m.type==='user'?'ผู้เล่น'
     const energyChange = -Math.floor(Math.random() * 10) - 5;
     const hungerChange = -Math.floor(Math.random() * 15) - 10;
 
+    // --- ✨ NEW: Extract and store new choices ---
+    const newChoices = extractChoices(text);
+
     const newGameState = {
       ...gameState,
       day: newDay,
@@ -115,53 +139,47 @@ ${chatHistory.slice(-4).map((m: any)=>`${m.type==='user'?'ผู้เล่น'
       minute: newMinute,
       energy: Math.max(0, Math.min(100, gameState.energy + energyChange)),
       hunger: Math.max(0, Math.min(100, gameState.hunger + hungerChange)),
-      last_action: newLastAction, // ใช้ค่าที่อัปเดตแล้ว
+      last_action: newLastAction,
       last_response: text,
+      previousChoices: newChoices, // Store the new choices
       timestamp: new Date().toISOString(),
     };
 
     const skillUpdates = [];
     const relationshipUpdates = [];
 
-    if (prompt.includes("กีตาร์") || prompt.includes("เล่นดนตรี")) {
+    if (actionText.includes("กีตาร์") || actionText.includes("เล่นดนตรี")) {
       skillUpdates.push({ name: "กีตาร์", change: 5 });
       newGameState.mood = "มีความสุข";
     }
-
-    if (prompt.includes("พูด") || prompt.includes("สนทนา") || prompt.includes("สัมภาษณ์")) {
+    if (actionText.includes("พูด") || actionText.includes("สนทนา") || actionText.includes("สัมภาษณ์")) {
       skillUpdates.push({ name: "การพูด", change: 3 });
     }
-
-    if (prompt.includes("อ่านหนังสือ") || prompt.includes("เรียนรู้")) {
+    if (actionText.includes("อ่านหนังสือ") || actionText.includes("เรียนรู้")) {
       skillUpdates.push({ name: "ความรู้ทั่วไป", change: 4 });
     }
-
-    if (prompt.includes("ทำอาหาร") || prompt.includes("ทำข้าว") || prompt.includes("ปรุงอาหาร")) {
+    if (actionText.includes("ทำอาหาร") || actionText.includes("ทำข้าว") || actionText.includes("ปรุงอาหาร")) {
       skillUpdates.push({ name: "การทำอาหาร", change: 3 });
       newGameState.hunger = Math.min(100, newGameState.hunger + 30);
     }
-
-    if (prompt.includes("กิน") || prompt.includes("อาหาร")) {
+    if (actionText.includes("กิน") || actionText.includes("อาหาร")) {
       newGameState.hunger = Math.min(100, newGameState.hunger + 40);
       newGameState.energy = Math.min(100, newGameState.energy + 20);
       newGameState.money = Math.max(0, newGameState.money - 50);
     }
-
-    if (prompt.includes("นอน") || prompt.includes("หลับ")) {
+    if (actionText.includes("นอน") || actionText.includes("หลับ")) {
       newGameState.energy = 100;
       newGameState.hour = 8;
       newGameState.minute = 0;
       newGameState.day += 1;
     }
-
-    if (prompt.includes("วิ่ง") || prompt.includes("ออกกำลัง") || prompt.includes("เล่นกีฬา")) {
+    if (actionText.includes("วิ่ง") || actionText.includes("ออกกำลัง") || actionText.includes("เล่นกีฬา")) {
       skillUpdates.push({ name: "สุขภาพ", change: 4 });
       newGameState.energy = Math.max(0, newGameState.energy - 20);
       newGameState.hunger = Math.max(0, newGameState.hunger - 15);
     }
-
-    if (prompt.includes("คุยกับ") || prompt.includes("พบ")) {
-      const nameMatch = prompt.match(/คุยกับ\s*(\S+)|พบ\s*(\S+)/);
+    if (actionText.includes("คุยกับ") || actionText.includes("พบ")) {
+      const nameMatch = actionText.match(/คุยกับ\s*(\S+)|พบ\s*(\S+)/);
       if (nameMatch) {
         const personName = nameMatch[1] || nameMatch[2];
         relationshipUpdates.push({ name: personName, change: 3 });
