@@ -13,6 +13,12 @@ const redis = new Redis({
 });
 
 export async function POST(req: Request) {
+  // --- ย้ายโค้ดสำหรับ Debug มาไว้ที่นี่ ---
+  console.log("Checking for GROQ_API_KEY...");
+  console.log(`Is GROQ_API_KEY present? ${!!process.env.GROQ_API_KEY}`);
+  console.log(`GROQ_API_KEY length: ${process.env.GROQ_API_KEY?.length || 0}`);
+  // --- สิ้นสุดส่วนที่ย้ายมา ---
+
   try {
     const { prompt, characterState, gameState, chatHistory, characterId } =
       await req.json();
@@ -82,7 +88,7 @@ export async function POST(req: Request) {
       const result = await generateText({
         model: groq("llama3-8b-8192"),
         prompt: systemPrompt,
-        maxTokens: 300, // ลด maxTokens ลงเล็กน้อยเพื่อป้องกันคำตอบที่ยาวเกินไป
+        maxTokens: 300,
       });
       text = result.text;
     } catch (aiError) {
