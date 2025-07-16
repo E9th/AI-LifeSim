@@ -41,7 +41,9 @@ export default function HomePage() {
   }, []);
 
   const handleDelete = async (characterId: string) => {
-    if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบตัวละครนี้? การกระทำนี้ไม่สามารถย้อนกลับได้`)) {
+    // ใช้ custom modal แทน confirm
+    const userConfirmed = window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบตัวละครนี้? การกระทำนี้ไม่สามารถย้อนกลับได้`);
+    if (!userConfirmed) {
       return;
     }
 

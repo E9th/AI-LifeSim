@@ -1,75 +1,77 @@
-"use client"
+"use client";
 
-import type React from "react"
-
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import type React from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function CreateCharacterPage() {
-  const [name, setName] = useState("")
-  const [age, setAge] = useState(20)
-  const [gender, setGender] = useState("")
-  const [background, setBackground] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const router = useRouter()
-  const maxLength = 500
+  const [name, setName] = useState("");
+  const [age, setAge] = useState(20);
+  const [gender, setGender] = useState("");
+  const [background, setBackground] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
+  const maxLength = 500;
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!name.trim()) {
-      alert("กรุณากรอกชื่อตัวละคร")
-      return
+      alert("กรุณากรอกชื่อตัวละคร");
+      return;
     }
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
 
     try {
-      // ส่งข้อมูลไปยัง API เพื่อบันทึกใน Supabase
       const response = await fetch("/api/create-character", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
           age,
           gender: gender || null,
           background: background.trim() || null,
         }),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error("Failed to create character")
+        throw new Error("Failed to create character");
       }
 
-      const result = await response.json()
-      console.log("Character created:", result)
-
-      // เก็บ character ID ใน localStorage สำหรับใช้ในหน้าเกม
+      const result = await response.json();
+      
       if (result.character?.id) {
-        localStorage.setItem("characterId", result.character.id)
+        // เพิ่ม ID ของตัวละครใหม่เข้าไปในรายการที่เก็บใน localStorage
+        const existingIds = JSON.parse(localStorage.getItem("characterIds") || "[]");
+        // ป้องกันการเพิ่ม ID ซ้ำ
+        if (!existingIds.includes(result.character.id)) {
+            const newIds = [...existingIds, result.character.id];
+            localStorage.setItem("characterIds", JSON.stringify(newIds));
+        }
+        
+        // **การแก้ไขที่สำคัญ: นำทางกลับไปหน้าหลักเสมอ**
+        router.push(`/`);
+      } else {
+         throw new Error("Character ID not found in API response");
       }
 
-      // นำทางไปหน้าเกม
-      router.push("/game")
     } catch (error) {
-      console.error("Error creating character:", error)
-      alert("เกิดข้อผิดพลาดในการสร้างตัวละคร กรุณาลองอีกครั้ง")
+      console.error("Error creating character:", error);
+      alert("เกิดข้อผิดพลาดในการสร้างตัวละคร กรุณาลองอีกครั้ง");
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   return (
     <div className="antialiased hero-bg min-h-screen">
-      {/* Header */}
       <header className="w-full py-6">
         <div className="container mx-auto px-6 flex justify-center items-center">
           <h1 className="text-xl font-bold tracking-widest">AI LifeSim</h1>
         </div>
       </header>
 
-      {/* Character Creation Form */}
       <main className="w-full flex justify-center items-center py-10 px-4">
         <div className="form-container">
           <div className="text-center mb-8">
@@ -145,7 +147,7 @@ export default function CreateCharacterPage() {
                 value={background}
                 onChange={(e) => {
                   if (e.target.value.length <= maxLength) {
-                    setBackground(e.target.value)
+                    setBackground(e.target.value);
                   }
                 }}
                 disabled={isSubmitting}
@@ -155,18 +157,21 @@ export default function CreateCharacterPage() {
               </p>
             </div>
 
-            <div className="text-center">
-              <button
-                type="submit"
-                className="cta-button font-bold py-3 px-10 rounded-sm text-lg tracking-wider"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "กำลังสร้าง..." : "สร้างตัวละคร"}
-              </button>
+            <div className="flex items-center justify-center space-x-4">
+                <Link href="/" className="text-sm text-gray-600 hover:underline">
+                    กลับหน้าหลัก
+                </Link>
+                <button
+                    type="submit"
+                    className="cta-button font-bold py-3 px-10 rounded-sm text-lg tracking-wider"
+                    disabled={isSubmitting}
+                >
+                    {isSubmitting ? "กำลังสร้าง..." : "สร้างตัวละคร"}
+                </button>
             </div>
           </form>
         </div>
       </main>
     </div>
-  )
+  );
 }
