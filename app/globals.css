@@ -1,0 +1,189 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Sarabun", sans-serif;
+  background-color: #f8f5f2;
+  color: #4a4441;
+}
+
+.hero-bg {
+  background-image: url("https://www.transparenttextures.com/patterns/light-paper-fibers.png");
+}
+
+.book-title {
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.cta-button {
+  background-color: transparent;
+  border: 1px solid #4a4441;
+  color: #4a4441;
+  transition: all 0.3s ease;
+}
+
+.cta-button:hover {
+  background-color: #4a4441;
+  color: #f8f5f2;
+  transform: scale(1.05);
+}
+
+.prose-style {
+  max-width: 65ch;
+  line-height: 1.8;
+}
+
+.form-container {
+  max-width: 600px;
+  background-color: rgba(255, 255, 255, 0.5);
+  border: 1px solid #eae0d5;
+  padding: 2rem 3rem;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  background-color: transparent;
+  border: none;
+  border-bottom: 1px solid #c0a98e;
+  border-radius: 0;
+  padding: 0.5rem 0.25rem;
+  transition: border-color 0.3s ease;
+  width: 100%;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-bottom-color: #4a4441;
+}
+
+.form-label {
+  color: #6e6662;
+}
+
+.optional-text {
+  font-size: 0.875rem;
+  color: #9c938e;
+}
+
+:root {
+  --bg-color: #f8f5f2;
+  --text-color: #4a4441;
+  --border-color: #c0a98e;
+  --panel-bg-color: rgba(255, 255, 255, 0.6);
+  --accent-color: #6e6662;
+}
+
+.main-container {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 2rem;
+  height: 100%;
+}
+
+.status-panel {
+  background-color: var(--panel-bg-color);
+  border-right: 1px solid #eae0d5;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat-log {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding-right: 1rem;
+}
+
+.chat-log p {
+  margin-bottom: 1.25rem;
+  line-height: 1.8;
+}
+
+.user-action {
+  font-style: italic;
+  color: var(--accent-color);
+}
+
+.user-action::before {
+  content: "> ";
+}
+
+.chat-input-area {
+  border-top: 1px solid #eae0d5;
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
+
+.chat-textarea {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  resize: none;
+}
+
+.chat-textarea:focus {
+  outline: none;
+  border-color: var(--text-color);
+}
+
+.send-button {
+  background-color: var(--text-color);
+  color: var(--bg-color);
+  transition: all 0.3s ease;
+  border: 1px solid var(--text-color);
+}
+
+.send-button:hover {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+.skill-bar {
+  background-color: #eae0d5;
+  border-radius: 4px;
+  overflow: hidden;
+  height: 8px;
+}
+
+.skill-progress {
+  background-color: var(--accent-color);
+  height: 100%;
+}
+
+.chat-log::-webkit-scrollbar,
+.status-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-log::-webkit-scrollbar-track,
+.status-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-log::-webkit-scrollbar-thumb,
+.status-panel::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 10px;
+  border: 2px solid var(--bg-color);
+}
+
+@media (max-width: 768px) {
+  .main-container {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
