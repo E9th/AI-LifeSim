@@ -17,10 +17,9 @@ function extractChoices(text: string): [string, string] {
   const choiceRegex = /ทางเลือก:\s*1\.\s*(.*?)\s*2\.\s*(.*)/s;
   const match = text.match(choiceRegex);
   if (match && match[1] && match[2]) {
-    // Trim whitespace and potential trailing newlines
     return [match[1].trim(), match[2].trim()];
   }
-  // Default choices if parsing fails, to keep the game going
+  // Default choices if parsing fails
   return ["สำรวจรอบๆ", "พักผ่อนสักครู่"];
 }
 
@@ -47,27 +46,35 @@ export async function POST(req: Request) {
       );
     }
 
-    let text = "";
-    let actionText = prompt;
+    // --- 💡 1. Sanitize history and determine the real action ---
+    const sanitizedHistory = chatHistory.map((m: any) => ({
+        ...m,
+        text: m.text.replace(/\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}:\d{2}/g, '').trim()
+    }));
 
-    // --- 💡 FIX: Map numbered input to actual choice text ---
-    if ((prompt === '1' || prompt === '2') && gameState.previousChoices && gameState.previousChoices.length === 2) {
-        actionText = gameState.previousChoices[parseInt(prompt) - 1];
+    const rawPrompt = prompt.trim();
+    let actionText: string;
+
+    if ((rawPrompt === '1' || rawPrompt === '2') && gameState.previousChoices?.length === 2) {
+        actionText = gameState.previousChoices[parseInt(rawPrompt) - 1];
+    } else {
+        actionText = rawPrompt;
     }
 
+    let text = "";
     let newLastAction = actionText;
 
-    // --- 🛡️ FIX: Refined fallback logic ---
+    // --- 🛡️ 2. Refined fallback logic based on actionText ---
     if (actionText === gameState.last_action) {
       const fallbackResponses = [
         `เอิร์ธพยายามจะ '${actionText}' อีกครั้ง แต่ดูเหมือนว่าไม่มีอะไรเปลี่ยนแปลงหรือเกิดขึ้นเพิ่มเติมในตอนนี้ เขาจึงหยุดและคิดว่าจะทำอะไรต่อไปดี\nความรู้สึก: เอิร์ธรู้สึกว่าควรจะลองทำอะไรใหม่ๆ\nทางเลือก: 1. ออกไปเดินเล่นนอกบ้าน 2. เปิดทีวีดู`,
         `การทำ '${actionText}' ซ้ำอีกรอบไม่ได้ให้ผลลัพธ์ที่แตกต่างไปจากเดิม เอิร์ธจึงมองหาสิ่งอื่นทำ\nความรู้สึก: เอิร์ธเริ่มรู้สึกเบื่อเล็กน้อย\nทางเลือก: 1. จัดห้องให้เป็นระเบียบ 2. หาหนังสือมาอ่าน`
       ];
       text = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
-      // Reset last_action after fallback to prevent loop
+      // Reset last_action to prevent getting stuck in a fallback loop
       newLastAction = `__FALLBACK_RESOLVED__`; 
     } else {
-      // --- 🖋️ Prompt V6: Updated for free-text ---
+      // --- 🖋️ 3. Generative branch using sanitized data ---
       const systemPrompt = `
 คุณคือ Game Master เล่าเรื่องราวของ AI LifeSim ในรูปแบบนิยายสั้นภาษาไทย
 ห้ามพิมพ์วันที่หรือเวลาใด ๆ ในเนื้อเรื่อง
@@ -87,7 +94,7 @@ export async function POST(req: Request) {
 
 ---
 ประวัติสนทนา (4 ข้อสุดท้าย):
-${chatHistory.slice(-4).map((m: any)=>`${m.type==='user'?'ผู้เล่น':'AI'}: ${m.text}`).join('\n')}
+${sanitizedHistory.slice(-4).map((m: any)=>`${m.type==='user'?'ผู้เล่น':'AI'}: ${m.text}`).join('\n')}
 
 ผู้เล่นเลือก: "${actionText}"
 
@@ -129,7 +136,6 @@ ${chatHistory.slice(-4).map((m: any)=>`${m.type==='user'?'ผู้เล่น'
     const energyChange = -Math.floor(Math.random() * 10) - 5;
     const hungerChange = -Math.floor(Math.random() * 15) - 10;
 
-    // --- ✨ NEW: Extract and store new choices ---
     const newChoices = extractChoices(text);
 
     const newGameState = {
@@ -141,7 +147,7 @@ ${chatHistory.slice(-4).map((m: any)=>`${m.type==='user'?'ผู้เล่น'
       hunger: Math.max(0, Math.min(100, gameState.hunger + hungerChange)),
       last_action: newLastAction,
       last_response: text,
-      previousChoices: newChoices, // Store the new choices
+      previousChoices: newChoices,
       timestamp: new Date().toISOString(),
     };
 
