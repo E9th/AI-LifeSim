@@ -48,13 +48,15 @@ function GamePageContent() {
   const [character, setCharacter] = useState<Character | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [chatInput, setChatInput] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isPageLoading, setIsPageLoading] = useState(true); // สถานะโหลดหน้าครั้งแรก
+  const [isChatLoading, setIsChatLoading] = useState(false); // สถานะรอ AI ตอบ
   const [chatLog, setChatLog] = useState<ChatMessage[]>([]);
   
   const searchParams = useSearchParams();
   const router = useRouter();
   const characterId = searchParams.get('characterId');
   const chatLogRef = useRef<HTMLDivElement>(null);
+  const endOfMessagesRef = useRef<HTMLDivElement>(null); // Ref สำหรับจุดท้ายสุดของแชท
 
   useEffect(() => {
     if (!characterId) {
@@ -63,7 +65,7 @@ function GamePageContent() {
     }
 
     const loadGameData = async () => {
-      setIsLoading(true);
+      setIsPageLoading(true);
       try {
         const response = await fetch(`/api/chat-history?characterId=${characterId}`);
         if (!response.ok) {
@@ -89,22 +91,21 @@ function GamePageContent() {
         console.error("Error loading game data:", error);
         router.push('/');
       } finally {
-        setIsLoading(false);
+        setIsPageLoading(false);
       }
     };
 
     loadGameData();
   }, [characterId, router]);
 
+  // --- ✨ FIX: ปรับปรุงการ Scroll ---
   useEffect(() => {
-    if (chatLogRef.current) {
-      chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
-    }
-  }, [chatLog]);
+    endOfMessagesRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatLog]); // ทำงานทุกครั้งที่ chatLog เปลี่ยน
 
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isLoading || !character || !gameState) return;
+    if (!chatInput.trim() || isChatLoading || !character || !gameState) return;
 
     const userMessage = chatInput.trim();
     const newUserMessage: ChatMessage = {
@@ -114,7 +115,7 @@ function GamePageContent() {
     };
     setChatLog((prev) => [...prev, newUserMessage]);
     setChatInput("");
-    setIsLoading(true);
+    setIsChatLoading(true);
 
     try {
       const response = await fetch("/api/chat", {
@@ -185,7 +186,7 @@ function GamePageContent() {
         },
       ]);
     } finally {
-      setIsLoading(false);
+      setIsChatLoading(false);
     }
   };
 
@@ -218,12 +219,25 @@ function GamePageContent() {
     return "กลางคืน";
   };
 
-  if (isLoading || !character || !gameState) {
+  // --- ✨ FIX: แสดงหน้าโหลดเฉพาะครั้งแรกที่เข้าหน้า ---
+  if (isPageLoading) {
     return (
         <div className="flex justify-center items-center min-h-screen">
             <p>กำลังโหลดข้อมูลเกม...</p>
         </div>
-    );
+    )
+  }
+  
+  if (!character || !gameState) {
+    // กรณีที่โหลดข้อมูลไม่สำเร็จ
+    return (
+        <div className="flex flex-col justify-center items-center min-h-screen">
+            <p className="mb-4">ไม่สามารถโหลดข้อมูลตัวละครได้</p>
+            <Link href="/" className="cta-button py-2 px-4 rounded-md">
+                กลับหน้าหลัก
+            </Link>
+        </div>
+    )
   }
 
   return (
@@ -234,7 +248,7 @@ function GamePageContent() {
             &larr; กลับไปหน้าเลือกตัวละคร
           </Link>
           <h1 className="text-xl font-bold tracking-widest">AI LifeSim</h1>
-          <div className="w-24"></div> {/* Spacer */}
+          <div className="w-36 md:w-48"></div> {/* Spacer */}
         </div>
       </header>
 
@@ -313,7 +327,8 @@ function GamePageContent() {
                   )}
                 </div>
               ))}
-              {isLoading && <p className="text-gray-500 italic">AI กำลังคิด...</p>}
+              {isChatLoading && <p className="text-gray-500 italic">AI กำลังคิด...</p>}
+              <div ref={endOfMessagesRef} /> {/* Element สำหรับ Scroll ไปหา */}
             </div>
 
             <div className="chat-input-area">
@@ -324,12 +339,12 @@ function GamePageContent() {
                   placeholder="คุณจะทำอะไรต่อไป..."
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
-                  disabled={isLoading}
+                  disabled={isChatLoading}
                 ></textarea>
                 <button
                   type="submit"
                   className="send-button font-bold py-2 px-4 rounded-md"
-                  disabled={isLoading || !chatInput.trim()}
+                  disabled={isChatLoading || !chatInput.trim()}
                 >
                   ส่ง
                 </button>
