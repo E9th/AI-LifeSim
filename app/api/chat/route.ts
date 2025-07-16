@@ -13,12 +13,6 @@ const redis = new Redis({
 });
 
 export async function POST(req: Request) {
-  // --- ย้ายโค้ดสำหรับ Debug มาไว้ที่นี่ ---
-  console.log("Checking for GROQ_API_KEY...");
-  console.log(`Is GROQ_API_KEY present? ${!!process.env.GROQ_API_KEY}`);
-  console.log(`GROQ_API_KEY length: ${process.env.GROQ_API_KEY?.length || 0}`);
-  // --- สิ้นสุดส่วนที่ย้ายมา ---
-
   try {
     const { prompt, characterState, gameState, chatHistory, characterId } =
       await req.json();
@@ -38,7 +32,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // --- ✨ Prompt ที่ปรับปรุงใหม่ ---
     const systemPrompt = `
 คุณคือ AI Game Master ของเกมจำลองชีวิตชื่อ AI LifeSim บทบาทของคุณคือการบรรยายผลลัพธ์ของการกระทำของผู้เล่นอย่างสร้างสรรค์และสมจริง
 
@@ -80,7 +73,6 @@ export async function POST(req: Request) {
 
 **ผลลัพธ์ที่เกิดขึ้น:**
 `;
-    // --- สิ้นสุด Prompt ที่ปรับปรุงใหม่ ---
 
     let text = "";
 
@@ -95,8 +87,6 @@ export async function POST(req: Request) {
       console.error("Groq API Error:", aiError);
       text = `คุณทำ '${prompt}' แต่ดูเหมือนว่าโลกยังไม่พร้อมตอบสนองต่อการกระทำนี้ ลองทำอย่างอื่นดูก่อน`;
     }
-
-    // (ส่วนที่เหลือของโค้ดยังคงเดิม)
 
     const timePassage = Math.floor(Math.random() * 45) + 15;
     let newHour = gameState.hour;
